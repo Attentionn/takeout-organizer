@@ -1,6 +1,8 @@
-# Organizer
+# Takeout Organizer
 
 [Español](README.es.md)
+
+I hate the way Google Takeout spits everything out. I opened my download and found years of photos mixed in with screenshots and a bunch of TikToks I’d forgotten I ever saved. I made this little tool to sort out my drive and figured it might save you the trouble of doing yours by hand.
 
 Organizer is a Windows console app for sorting photos and videos from one or more folders, including Google Photos Takeout exports. Choose your sources, where to put the library, and what to call it. The app previews every destination before you move a file.
 
