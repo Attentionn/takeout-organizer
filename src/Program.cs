@@ -75,7 +75,20 @@ internal static partial class Organizador
             name.EndsWith(".") || name.EndsWith(" ") ||
             Regex.IsMatch(name,@"^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]|CONIN\$|CONOUT\$)(?:\.|$)",RegexOptions.IgnoreCase))
             throw new IOException(T("Escribe un nombre de carpeta válido.","Enter a valid folder name."));
-        Crear(Path.Combine(folder,name),sources.ToArray());
+        Console.WriteLine(T("¿Cómo quieres agrupar los archivos?\n1. Año / mes / día / tipo\n2. Año / mes / tipo\n3. Año / tipo (juntar los meses)\n4. Solo por tipo (juntar todos los años)",
+                            "How should files be grouped?\n1. Year / month / day / type\n2. Year / month / type\n3. Year / type (combine months)\n4. Type only (combine years)"));
+        string[] layouts={"day","month","year","type"};
+        while (true)
+        {
+            Console.Write("[1]> ");
+            string choice=Console.ReadLine();
+            if (choice==null) return;
+            int index;
+            if (choice=="") choice="1";
+            if (!int.TryParse(choice,out index) || index<1 || index>4) continue;
+            Crear(Path.Combine(folder,name),sources.ToArray(),layouts[index-1]);
+            return;
+        }
     }
     static void Menu()
     {
@@ -109,8 +122,8 @@ internal static partial class Organizador
     }
     static void Uso()
     {
-        Console.WriteLine(T("Organizer [--lang es|en] prever DESTINO ORIGEN [ORIGEN ...]\nOrganizer aplicar CARPETA_DEL_LOTE\nOrganizer deshacer CARPETA_DEL_LOTE",
-                            "Organizer [--lang en|es] preview DESTINATION SOURCE [SOURCE ...]\nOrganizer apply BATCH_FOLDER\nOrganizer undo BATCH_FOLDER"));
+        Console.WriteLine(T("Organizer [--lang es|en] prever [--layout day|month|year|type] DESTINO ORIGEN [ORIGEN ...]\nOrganizer aplicar CARPETA_DEL_LOTE\nOrganizer deshacer CARPETA_DEL_LOTE",
+                            "Organizer [--lang en|es] preview [--layout day|month|year|type] DESTINATION SOURCE [SOURCE ...]\nOrganizer apply BATCH_FOLDER\nOrganizer undo BATCH_FOLDER"));
     }
     [STAThread] public static int Main(string[] args)
     {
@@ -139,6 +152,11 @@ internal static partial class Organizador
             if (command == "prever" || command == "preview")
             {
                 if (args.Length == 1) Preparar();
+                else if (CI.Equals(args[1],"--layout"))
+                {
+                    if (args.Length<5 || !new[]{"day","month","year","type"}.Contains(args[2])) { Uso(); return 1; }
+                    Crear(args[3],args.Skip(4).ToArray(),args[2]);
+                }
                 else if (args.Length >= 3) Crear(args[1],args.Skip(2).ToArray());
                 else { Uso(); return 1; }
                 return 0;

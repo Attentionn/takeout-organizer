@@ -15,6 +15,17 @@ Organizer is a Windows console app for sorting photos and videos from one or mor
 
 ## How files are organized
 
+Choose how many date folders to keep when creating the preview. A Facebook screenshot from June 7 would land in one of these folders:
+
+| Option | Path inside the library |
+| --- | --- |
+| 1 · Day (default) | `2024/06 - June/2024-06-07/Screenshots/Facebook/` |
+| 2 · Month | `2024/06 - June/Screenshots/Facebook/` |
+| 3 · Year | `2024/Screenshots/Facebook/` |
+| 4 · Type only | `Screenshots/Facebook/` |
+
+To regroup an existing library, select it as the source and give the destination a different name on the same drive. Album names stay under their category. Review **Plan.csv** and keep the batch to undo the move. On the command line, use `preview --layout year` followed by the destination and sources. The available modes are `day`, `month`, `year` and `type`.
+
 ```text
 Family Library/
   2024/06 - June/2024-06-07/Photos/Vacation/

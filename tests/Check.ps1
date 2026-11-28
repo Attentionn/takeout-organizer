@@ -75,7 +75,7 @@ Verificar ($LASTEXITCODE -eq 0) 'deshacer lote parcial'
 & $exe aplicar $lote
 Verificar ($LASTEXITCODE -eq 1) 'plan modificado'
 # Drive the English wizard, then apply and undo its plan in Spanish.
-$wizardOutput = @('1', '1', $anio, '', $prueba, 'My Photo Library', '4') | & $exe
+$wizardOutput = @('1', '1', $anio, '', $prueba, 'My Photo Library', '', '4') | & $exe
 Verificar ($LASTEXITCODE -eq 0) 'English wizard failed'
 $englishBatch = Get-ChildItem -Directory -LiteralPath (Join-Path $prueba 'Planes') | Where-Object FullName -ne $lote
 $english = @(Import-Csv -LiteralPath (Join-Path $englishBatch.FullName 'Plan.csv'))
@@ -88,4 +88,33 @@ Verificar ($LASTEXITCODE -eq 0) 'apply English plan in Spanish'
 Verificar ($LASTEXITCODE -eq 0) 'undo English plan'
 $invalidOutput = @('2','1',$anio,'',$prueba,'..\Otro','4') | & $exe
 Verificar (@(Get-ChildItem -Directory -LiteralPath (Join-Path $prueba 'Planes')).Count -eq 2) 'invalid library name'
+$library=Join-Path $prueba 'Sorted'
+$folders=@('2024\06 - junio\2024-06-03\Capturas\Facebook\Album','2024\07 - July\2024-07-01\Capturas\Facebook\Album',
+    '2024\Mes desconocido\Videos\Posibles TikToks','Sin fecha\Fotos','Falsos Positivos\12 - diciembre\1969-12-31\Videos\Facebook')
+foreach ($folder in $folders) {
+    $path=Join-Path $library $folder
+    [void][IO.Directory]::CreateDirectory($path)
+    if ($folder -like '*Videos*') { Media $path 'clip.mp4' } else { Media $path 'unknown.jpg' }
+}
+foreach ($mode in @('day','month','year','type')) {
+    $outDir=Join-Path $prueba $mode
+    & $exe prever --layout $mode $outDir $library | Out-Null
+    Verificar ($LASTEXITCODE -eq 0) "preview $mode"
+    $batch=Get-ChildItem -Directory -LiteralPath (Join-Path $prueba 'Planes') | Where-Object {
+        (Get-Content -Raw -LiteralPath (Join-Path $_.FullName 'Lote.json') | ConvertFrom-Json).Destino -eq $outDir
+    }
+    $rows=@(Import-Csv -LiteralPath (Join-Path $batch.FullName 'Plan.csv'))
+    $prefix=@{day='2024\06 - junio\2024-06-03\';month='2024\06 - junio\';year='2024\';type=''}[$mode]
+    Verificar ($rows.Count -eq 5) "all files $mode"
+    Verificar ($rows.Destino -contains (Join-Path $outDir ($prefix+'Capturas\Facebook\Album\unknown.jpg'))) "layout and album $mode"
+    Verificar ($rows.Destino -like '*Falsos Positivos\*Videos\Facebook\clip.mp4') "manual folder $mode"
+    if ($mode -eq 'year' -or $mode -eq 'type') {
+        Verificar ($rows.Destino -like '*unknown (2).jpg') "merge collision $mode"
+        Verificar ($rows.Destino -contains (Join-Path $outDir ($prefix+'Videos\Posibles TikToks\clip.mp4'))) "unknown month $mode"
+    }
+    & $exe aplicar $batch.FullName | Out-Null
+    Verificar ($LASTEXITCODE -eq 0) "apply $mode"
+    & $exe deshacer $batch.FullName | Out-Null
+    Verificar ($LASTEXITCODE -eq 0) "undo $mode"
+}
 Write-Output "Pruebas correctas en $prueba"

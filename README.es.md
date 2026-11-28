@@ -15,6 +15,17 @@ Organizer es una aplicación de consola para Windows que ordena fotos y videos d
 
 ## Cómo queda la fototeca
 
+Al crear la vista previa puedes elegir cuántas carpetas de fecha quieres. Una captura de Facebook del 7 de junio quedaría así:
+
+| Opción | Ruta dentro de la fototeca |
+| --- | --- |
+| 1 · Día (predeterminada) | `2024/06 - junio/2024-06-07/Capturas/Facebook/` |
+| 2 · Mes | `2024/06 - junio/Capturas/Facebook/` |
+| 3 · Año | `2024/Capturas/Facebook/` |
+| 4 · Solo tipo | `Capturas/Facebook/` |
+
+Para reagrupar una fototeca existente, elígela como origen y dale otro nombre al destino en el mismo disco. Los álbumes se conservan dentro del tipo. Puedes revisar el resultado en **Plan.csv** y deshacer el movimiento con el mismo lote. En la línea de comandos usa `prever --layout year` seguido del destino y los orígenes. Los modos disponibles son `day`, `month`, `year` y `type`.
+
 ```text
 Recuerdos/
   2024/06 - junio/2024-06-07/Fotos/Vacaciones/

@@ -32,6 +32,7 @@ internal static partial class Organizador
         public string[] Origenes {get;set;}
         public string Destino {get;set;}
         public string SHA256 {get;set;}
+        public string Layout {get;set;}
     }
     class Anexo
     {
@@ -99,7 +100,8 @@ internal static partial class Organizador
         var pistas = partes.Concat(new[]{nombre});
         bool fb = pistas.Any(p => Facebook.IsMatch(p));
         bool cap = pistas.Any(p => Captura.IsMatch(p) || CI.Equals(p,"Capturas"));
-        if (video && !fb && !cap && NombreHex.IsMatch(Path.GetFileNameWithoutExtension(nombre)))
+        if (video && !fb && !cap && (NombreHex.IsMatch(Path.GetFileNameWithoutExtension(nombre)) ||
+            partes.Any(p=>CI.Equals(p,"Posibles TikToks") || CI.Equals(p,"Possible TikToks"))))
             return Path.Combine("Videos",T("Posibles TikToks","Possible TikToks"));
         string cat = video ? "Videos" : cap ? T("Capturas","Screenshots") : fb ? "Facebook" : T("Fotos","Photos");
         if (video && cap) cat = Path.Combine(cat,T("Capturas","Screenshots"));
@@ -107,13 +109,79 @@ internal static partial class Organizador
     }
     static bool CarpetaTipo(string p)
     {
-        return Regex.IsMatch(p, @"^(facebook|screenshots?|capturas(?: de pantalla)?|fotos|photos|videos|im[aá]genes)$", RegexOptions.IgnoreCase);
+        return Regex.IsMatch(p, @"^(facebook|screenshots?|capturas(?: de pantalla)?|fotos|photos|videos|im[aá]genes|posibles tiktoks|possible tiktoks)$", RegexOptions.IgnoreCase);
     }
-    static string RutaFecha(Fecha fecha, string anio)
+    static string RutaFecha(string layout, string anio, int mes, DateTime? dia)
     {
-        if (fecha == null) return anio == null ? T("Sin fecha","Undated") : Path.Combine(anio,T("Mes desconocido","Unknown month"));
-        var d = fecha.Dia;
-        return Path.Combine(d.ToString("yyyy"),d.ToString("MM")+" - "+d.ToString("MMMM",Idioma.Cultura),d.ToString("yyyy-MM-dd"));
+        if (layout=="type") return "";
+        if (anio==null) return T("Sin fecha","Undated");
+        if (layout=="year") return anio;
+        if (mes==0) return Path.Combine(anio,T("Mes desconocido","Unknown month"));
+        string month=mes.ToString("00")+" - "+Idioma.Cultura.DateTimeFormat.GetMonthName(mes);
+        string path=Path.Combine(anio,month);
+        return layout=="day" && dia.HasValue ? Path.Combine(path,dia.Value.ToString("yyyy-MM-dd")) : path;
+    }
+    // Read only the leading date/category structure. Subsequent directories belong to albums.
+    class RutaAnterior
+    {
+        public string Anio, GrupoManual, Categoria;
+        public int Mes;
+        public DateTime? Dia;
+        public string[] Album;
+        static readonly Regex MesNombrado = new Regex(@"^(0[1-9]|1[0-2]) - (\p{L}+)$");
+        static readonly string[] NombresMes =
+            "enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre".Split(' ');
+        static readonly string[] MonthNames = CultureInfo.InvariantCulture.DateTimeFormat.MonthNames;
+        static int NumeroMes(string p)
+        {
+            var m=MesNombrado.Match(p);
+            if (!m.Success) return 0;
+            int n=int.Parse(m.Groups[1].Value);
+            return CI.Equals(m.Groups[2].Value,NombresMes[n-1]) || CI.Equals(m.Groups[2].Value,MonthNames[n-1]) ? n : 0;
+        }
+        public static RutaAnterior Leer(string[] p, bool video)
+        {
+            if (p.Length==0) return null;
+            var r=new RutaAnterior();
+            int i=0;
+            if (Regex.IsMatch(p[0],@"^\d{4}$")) r.Anio=p[i++];
+            else if (CI.Equals(p[0],"Sin fecha") || CI.Equals(p[0],"Undated")) i++;
+            else if (p.Length>2 && NumeroMes(p[1])!=0) r.GrupoManual=p[i++];
+            else return null;
+            if (i>0 && i<p.Length)
+            {
+                r.Mes=NumeroMes(p[i]);
+                if (r.Mes!=0)
+                {
+                    i++;
+                    DateTime day;
+                    if (i<p.Length && DateTime.TryParseExact(p[i],"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out day)
+                        && day.Month==r.Mes && (r.Anio==null || day.ToString("yyyy")==r.Anio))
+                    { r.Dia=day; i++; }
+                }
+                else if (CI.Equals(p[i],"Mes desconocido") || CI.Equals(p[i],"Unknown month")) i++;
+            }
+            if (i>=p.Length) return null;
+            bool videos=CI.Equals(p[i],"Videos");
+            if (videos!=video) return null;
+            if (videos) r.Categoria="Videos";
+            else if (CI.Equals(p[i],"Fotos") || CI.Equals(p[i],"Photos")) r.Categoria=T("Fotos","Photos");
+            else if (CI.Equals(p[i],"Capturas") || CI.Equals(p[i],"Screenshots")) r.Categoria=T("Capturas","Screenshots");
+            else if (CI.Equals(p[i],"Facebook")) r.Categoria="Facebook";
+            else return null;
+            i++;
+            if (videos && i<p.Length && (CI.Equals(p[i],"Posibles TikToks") || CI.Equals(p[i],"Possible TikToks")))
+                { r.Categoria=Path.Combine(r.Categoria,T("Posibles TikToks","Possible TikToks")); i++; }
+            else
+            {
+                if (videos && i<p.Length && (CI.Equals(p[i],"Capturas") || CI.Equals(p[i],"Screenshots")))
+                    { r.Categoria=Path.Combine(r.Categoria,T("Capturas","Screenshots")); i++; }
+                if (i<p.Length && CI.Equals(p[i],"Facebook") && (videos || r.Categoria==T("Capturas","Screenshots")))
+                    { r.Categoria=Path.Combine(r.Categoria,"Facebook"); i++; }
+            }
+            r.Album=p.Skip(i).ToArray();
+            return r;
+        }
     }
     class Planificador : IDisposable
     {
@@ -182,18 +250,35 @@ internal static partial class Organizador
         void Medio(FileInfo f, string[] partes, List<Anexo> anexos)
         {
             bool video=Videos.Contains(f.Extension);
-            Fecha fecha=anexos.Select(a=>a.Google).FirstOrDefault(x=>x!=null);
-            if (fecha==null)
+            var anterior=RutaAnterior.Leer(partes,video);
+            bool usarCarpeta=anterior!=null && (anterior.Dia.HasValue || anterior.GrupoManual!=null ||
+                (anterior.Anio!=null && (cfg.Layout=="year" || (cfg.Layout=="month" && anterior.Mes!=0))));
+            Fecha fecha=null;
+            if (!usarCarpeta && cfg.Layout!="type") fecha=anexos.Select(a=>a.Google).FirstOrDefault(x=>x!=null);
+            if (fecha==null && !usarCarpeta && cfg.Layout!="type")
             {
                 try { fecha=Fechas.Archivo(f,video); }
                 catch (Exception e) { Aviso(f.FullName,T("Lectura de metadatos: ","Reading metadata: ")+e.Message); }
             }
-            if (fecha==null) fecha=Fechas.Nombre(Path.GetFileNameWithoutExtension(f.Name));
-            string year=partes.Select(p=>Fechas.Anual.Match(p)).Where(m=>m.Success).Select(m=>m.Groups[1].Value).LastOrDefault();
-            string fuente=fecha!=null ? fecha.Fuente : year!=null ? T("Solo año de carpeta","Folder year only") : T("Sin fecha","Undated");
-            string cat=Categoria(f.Name,partes,video);
-            string dest=Path.Combine(cfg.Destino,RutaFecha(fecha,year),cat);
-            foreach (string parte in partes.Where(p=>!Fechas.Anual.IsMatch(p) && !CarpetaTipo(p))) dest=Path.Combine(dest,parte);
+            if (fecha==null && !usarCarpeta && cfg.Layout!="type") fecha=Fechas.Nombre(Path.GetFileNameWithoutExtension(f.Name));
+            DateTime? dia=fecha!=null ? fecha.Dia : anterior!=null ? anterior.Dia : null;
+            string year=anterior!=null ? anterior.Anio : partes.Select(p=>Fechas.Anual.Match(p)).Where(m=>m.Success).Select(m=>m.Groups[1].Value).LastOrDefault();
+            int mes=dia.HasValue ? dia.Value.Month : anterior!=null ? anterior.Mes : 0;
+            if (dia.HasValue) year=dia.Value.ToString("yyyy");
+            string fuente=cfg.Layout=="type" ? T("Por tipo","By type") : fecha!=null ? fecha.Fuente :
+                anterior!=null && (anterior.Mes!=0 || anterior.Dia.HasValue) ? T("Carpeta de la fototeca","Library folder") :
+                year!=null ? T("Solo año de carpeta","Folder year only") : T("Sin fecha","Undated");
+            string cat=anterior!=null ? anterior.Categoria : Categoria(f.Name,partes,video);
+            string prefix=RutaFecha(cfg.Layout,year,mes,dia);
+            if (anterior!=null && anterior.GrupoManual!=null)
+            {
+                // A user-named year bucket (e.g. a review folder) stays separate.
+                prefix=RutaFecha(cfg.Layout,anterior.GrupoManual,mes,dia);
+                if (cfg.Layout=="type") prefix=anterior.GrupoManual;
+            }
+            var albums=anterior!=null ? anterior.Album : partes.Where(p=>!Fechas.Anual.IsMatch(p) && !CarpetaTipo(p));
+            string dest=Path.Combine(cfg.Destino,prefix,cat);
+            foreach (string parte in albums) dest=Path.Combine(dest,parte);
             if (anexos.Select(a=>a.DestinoDe(f.Name)).Distinct(CI).Count()!=anexos.Count)
             {
                 Aviso(f.FullName,T("Varios adjuntos reclaman el mismo nombre. El grupo permanece en origen.","Several sidecars would have the same name. Group left in source."));
@@ -250,9 +335,9 @@ internal static partial class Organizador
         }
         public void Dispose() { plan.Dispose(); avisos.Dispose(); }
     }
-    static string Crear(string destino,string[] roots)
+    static string Crear(string destino,string[] roots,string layout="day")
     {
-        var cfg=new Config{Destino=Full(destino),Origenes=roots.Select(Full).ToArray()};
+        var cfg=new Config{Destino=Full(destino),Origenes=roots.Select(Full).ToArray(),Layout=layout};
         Validar(cfg);
         if (File.Exists(cfg.Destino)) throw new IOException(T("El destino es un archivo.","The destination is a file."));
         foreach (string root in cfg.Origenes) if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
